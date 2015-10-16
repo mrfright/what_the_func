@@ -160,6 +160,7 @@ enum state {
     START_FIND_ID,
     ARRAY,
     FUNCTION,
+    TYPE,
     END
 };
 
@@ -189,7 +190,8 @@ void find_id() {
 void array() {
     //if [ array then read array and go to next state
     //if not array then check for func
-    if(comparestr(toks[current_tok].string, "[") == 0)  {
+    if(current_tok < token_index && 
+       comparestr(toks[current_tok].string, "[") == 0)  {
         printf(" array ");
         current_tok++;
         //if a number say array of that many, go to next
@@ -197,12 +199,16 @@ void array() {
             printf(" %s ", toks[current_tok++].string);
         }
         
-        int x[1][1];
+        printf(" of ");
         
         //if ] go to next state
         if(comparestr(toks[current_tok].string, "]") == 0) {
             current_tok++;
             //if now '(' like start of function, error
+            if(current_tok < token_index &&
+               comparestr(toks[current_tok].string, "(") == 0) {
+               printf("\nerror, can't have []()\n");
+            }
             s = ARRAY;//go to array again because can have [][]
         }
         else {            
@@ -217,12 +223,86 @@ void array() {
     }
 }
 
-//rule - caller should have tok indexes set before 
+void func() {
+    if(current_tok < token_index && 
+       comparestr(toks[current_tok].string, "(") == 0) {
+        current_tok++;
+        printf(" function (");
+        while(current_tok < token_index && 
+              comparestr(toks[current_tok].string, ")") != 0) {
+            printf(" %s ", toks[current_tok++].string);
+            //read types in here?
+        }
+        //should be pointing at a ) or error end of tokens
+        if(current_tok >= token_index) {
+            printf(" error didn't find matching ')' for a function \n");
+            s = END;
+            return;
+        }
+        
+        if(comparestr(toks[current_tok].string, ")") != 0) {
+            printf(" error something wrong parsing function ");
+            s = END;
+            return;
+        }
+        
+        printf(") returning ");
+        current_tok++;
+        
+        //test
+        s = TYPE;
+    }
+    else {
+        //go to next thing to try
+        s = TYPE;
+    }
+}
+
+void type() {
+    if(prev_tok < 0) {
+        s = END;
+        return;
+    }
+    
+    if(comparestr(toks[prev_tok].string, "(") == 0) {
+        prev_tok--;
+        //going the other way again, current token better be a closing ')'
+        //if current over total or current not a ')' then error
+        if(current_tok >= token_index ||
+           comparestr(toks[current_tok].string, ")") != 0) {
+            printf("\nerror, expecting closing ')'\n");
+            s = END;
+            return;
+        }
+        
+        //it is a ')', advance current token, go to array state
+        current_tok++;
+        s = ARRAY;
+        return;
+    }
+    
+    //consume this type, move to next prev, state still TYPE
+    if(comparestr(toks[prev_tok].string, "const") == 0) {
+        printf(" read-only ");
+    }
+    else if(comparestr(toks[prev_tok].string, "*") == 0) {
+        printf(" pointer to ");
+    }
+    else {
+        printf(" %s ", toks[prev_tok].string);
+    }
+    
+    prev_tok--;
+    
+    //state still TYPE
+}
+
+//rule - caller/prev state should have tok indexes set before 
 //       calling the next state, called state assumes
 //       the indexes are set
 void cdecl(char* input_str) {
     current_tok = 0;
-
+    s = START_FIND_ID;
     did_not_find_id = 1;
     tokenize(input_str);
     //find id
@@ -235,14 +315,14 @@ void cdecl(char* input_str) {
                 array();
             } break;
             case FUNCTION: {
-                //for test
-                s = END;
-                
-                
-                printf(" (end function state)\n");
+                func();                
+            } break;
+            case TYPE: {
+                type();
             } break;
             default:
                 printf("\nState not implemented\n");
+                s = END;
                 break;
         }
     }
@@ -251,6 +331,18 @@ void cdecl(char* input_str) {
     if(did_not_find_id) {
         printf("\nerror, id not found\n");
     }
+}
+
+void test(char* this) {
+    printf("\n*****************\nTesting %s\n", this);
+    tokenize(this);
+    int print_tok_index;
+    for(print_tok_index = 0;
+         print_tok_index < token_index;
+         ++print_tok_index) {
+        printf("%s\n", toks[print_tok_index].string);
+    }
+    cdecl(this);
 }
 
 main() {
@@ -264,15 +356,9 @@ main() {
     printf("\n%d\n", d);
     d = '9';
     printf("\n%d\n", d);
-    char* thing = "int thing[]";
-    tokenize(thing);
-    int print_tok_index;
-    for(print_tok_index = 0;
-         print_tok_index < token_index;
-         ++print_tok_index) {
-        printf("%s\n", toks[print_tok_index].string);
-    }
-    cdecl(thing);
-    
-    thing = "char* const *(*next)();";
+
+    test("int thing[]");
+    test("char thing()");
+    test("int (*next)()");
+    test("char* const *(*next)(char more)");
 }
