@@ -125,6 +125,7 @@ void tokenize(char* input_str) {
 int is_num_str(char* input_str) {
 //is_num_char
     int is_a_num = 1;
+    if(input_str == 0) is_a_num = 0;
     while(*input_str) {
         if(is_num_char(*input_str++)) {
             continue;
@@ -208,6 +209,8 @@ void array() {
             if(current_tok < token_index &&
                comparestr(toks[current_tok].string, "(") == 0) {
                printf("\nerror, can't have []()\n");
+               s = END;
+               return;         
             }
             s = ARRAY;//go to array again because can have [][]
         }
@@ -219,6 +222,7 @@ void array() {
     }
     else {
         //not array, try function
+        //and maybe at end of tokens, see if that might be a bug
         s = FUNCTION;
     }
 }
